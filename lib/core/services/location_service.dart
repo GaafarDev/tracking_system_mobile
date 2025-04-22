@@ -1,73 +1,131 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:location/location.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import '../utils/api_config.dart';
 import 'auth_service.dart';
 
 class LocationService {
   final Location _location = Location();
-  Timer? _timer;
-  final AuthService _authService = AuthService();
+  final AuthService _authService;
 
-  // Start location tracking
-  Future<void> startLocationTracking(int vehicleId) async {
-    // Request permissions
+  Timer? _timer;
+  LocationData? _lastLocation;
+  final _locationStreamController = StreamController<LocationData>.broadcast();
+
+  Stream<LocationData> get locationStream => _locationStreamController.stream;
+  LocationData? get lastLocation => _lastLocation;
+
+  bool _isTracking = false;
+  bool get isTracking => _isTracking;
+
+  LocationService(this._authService);
+
+  // Initialize the location service
+  Future<bool> initialize() async {
+    // Check if location service is enabled
     bool serviceEnabled = await _location.serviceEnabled();
     if (!serviceEnabled) {
       serviceEnabled = await _location.requestService();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) return false;
     }
 
+    // Check for location permission
     PermissionStatus permissionStatus = await _location.hasPermission();
     if (permissionStatus == PermissionStatus.denied) {
       permissionStatus = await _location.requestPermission();
-      if (permissionStatus != PermissionStatus.granted) return;
+      if (permissionStatus != PermissionStatus.granted) return false;
     }
 
     // Set up location settings
     _location.changeSettings(
       accuracy: LocationAccuracy.high,
       interval: 10000, // 10 seconds
+      distanceFilter: 5, // 5 meters
     );
 
-    // Start periodic updates
-    _timer = Timer.periodic(Duration(seconds: 30), (timer) async {
-      await sendLocationToServer(vehicleId);
-    });
+    return true;
+  }
+
+  // Start location tracking
+  Future<bool> startLocationTracking(int vehicleId) async {
+    if (_isTracking) return true;
+
+    // Make sure location service is initialized
+    bool isInitialized = await initialize();
+    if (!isInitialized) return false;
+
+    try {
+      // Start listening to location updates
+      _location.onLocationChanged.listen((LocationData currentLocation) {
+        _lastLocation = currentLocation;
+        _locationStreamController.add(currentLocation);
+      });
+
+      // Start periodic updates to the server
+      _timer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+        await sendLocationToServer(vehicleId);
+      });
+
+      _isTracking = true;
+      return true;
+    } catch (e) {
+      print('Error starting location tracking: $e');
+      return false;
+    }
   }
 
   // Send location data to server
-  Future<void> sendLocationToServer(int vehicleId) async {
+  Future<bool> sendLocationToServer(int vehicleId) async {
     try {
-      LocationData locationData = await _location.getLocation();
-      String? token = await _authService.getToken();
+      if (_lastLocation == null) {
+        _lastLocation = await _location.getLocation();
+      }
 
+      String? token = await _authService.getToken();
       if (token == null) {
         print('Not authenticated, cannot send location');
-        return;
+        return false;
       }
 
       final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/location/update'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.updateLocation}'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
         body: jsonEncode({
-          'latitude': locationData.latitude,
-          'longitude': locationData.longitude,
-          'speed': locationData.speed,
-          'heading': locationData.heading,
+          'latitude': _lastLocation!.latitude,
+          'longitude': _lastLocation!.longitude,
+          'speed': _lastLocation!.speed,
+          'heading': _lastLocation!.heading,
           'vehicle_id': vehicleId,
         }),
       );
 
-      if (response.statusCode != 200) {
+      if (response.statusCode == 200) {
+        return true;
+      } else {
         print('Failed to update location: ${response.body}');
+        return false;
       }
     } catch (e) {
       print('Error sending location: $e');
+      return false;
+    }
+  }
+
+  // Get current location once
+  Future<LocationData?> getCurrentLocation() async {
+    try {
+      bool isInitialized = await initialize();
+      if (!isInitialized) return null;
+
+      return await _location.getLocation();
+    } catch (e) {
+      print('Error getting current location: $e');
+      return null;
     }
   }
 
@@ -75,5 +133,12 @@ class LocationService {
   void stopLocationTracking() {
     _timer?.cancel();
     _timer = null;
+    _isTracking = false;
+  }
+
+  // Dispose resources
+  void dispose() {
+    stopLocationTracking();
+    _locationStreamController.close();
   }
 }
