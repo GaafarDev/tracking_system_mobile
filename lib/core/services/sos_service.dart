@@ -4,6 +4,7 @@ import '../models/sos_alert.dart';
 import '../utils/api_config.dart';
 import 'auth_service.dart';
 import 'location_service.dart';
+import '../utils/api_utils.dart';
 
 class SosService {
   final AuthService _authService;
@@ -130,5 +131,22 @@ class SosService {
       print('Error canceling SOS alert: $e');
       return false;
     }
+  }
+
+  // Check active SOS alert using safe API call
+  Future<SosAlert?> checkActiveSOSAlert() async {
+    String? token = await _authService.getToken();
+    if (token == null) return null;
+
+    final apiCall = http.get(
+      Uri.parse('${ApiConfig.baseUrl}/api/sos/active'), // Fixed URL path
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    final result = await safeApiCall(apiCall);
+    if (result != null && result.containsKey('sos_alert')) {
+      return SosAlert.fromJson(result['sos_alert']);
+    }
+    return null;
   }
 }

@@ -24,28 +24,40 @@ class LocationService {
 
   // Initialize the location service
   Future<bool> initialize() async {
-    // Check if location service is enabled
-    bool serviceEnabled = await _location.serviceEnabled();
-    if (!serviceEnabled) {
-      serviceEnabled = await _location.requestService();
-      if (!serviceEnabled) return false;
+    // Check if running on web
+    if (kIsWeb) {
+      // Web-specific implementation
+      try {
+        _lastLocation = await _location.getLocation();
+        return true;
+      } catch (e) {
+        print('Web location error: $e');
+        return false;
+      }
+    } else {
+      // Mobile implementation (existing code)
+      bool serviceEnabled = await _location.serviceEnabled();
+      if (!serviceEnabled) {
+        serviceEnabled = await _location.requestService();
+        if (!serviceEnabled) return false;
+      }
+
+      // Check for location permission
+      PermissionStatus permissionStatus = await _location.hasPermission();
+      if (permissionStatus == PermissionStatus.denied) {
+        permissionStatus = await _location.requestPermission();
+        if (permissionStatus != PermissionStatus.granted) return false;
+      }
+
+      // Set up location settings
+      _location.changeSettings(
+        accuracy: LocationAccuracy.high,
+        interval: 10000, // 10 seconds
+        distanceFilter: 5, // 5 meters
+      );
+
+      return true;
     }
-
-    // Check for location permission
-    PermissionStatus permissionStatus = await _location.hasPermission();
-    if (permissionStatus == PermissionStatus.denied) {
-      permissionStatus = await _location.requestPermission();
-      if (permissionStatus != PermissionStatus.granted) return false;
-    }
-
-    // Set up location settings
-    _location.changeSettings(
-      accuracy: LocationAccuracy.high,
-      interval: 10000, // 10 seconds
-      distanceFilter: 5, // 5 meters
-    );
-
-    return true;
   }
 
   // Start location tracking

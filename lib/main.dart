@@ -6,6 +6,7 @@ import 'core/services/location_service.dart';
 import 'core/services/incident_service.dart';
 import 'core/services/sos_service.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/schedule_service.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/home/screens/home_screen.dart';
 
@@ -18,18 +19,23 @@ void main() {
     DeviceOrientation.portraitDown,
   ]);
 
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return MultiProvider(
+  runApp(
+    MultiProvider(
       providers: [
-        // Core services
+        // Register all required services
         Provider<AuthService>(create: (_) => AuthService()),
+        Provider<LocationService>(
+          create:
+              (context) => LocationService(
+                Provider.of<AuthService>(context, listen: false),
+              ),
+        ),
+        Provider<ScheduleService>(
+          create:
+              (context) => ScheduleService(
+                Provider.of<AuthService>(context, listen: false),
+              ),
+        ),
         // Add other services with dependencies
         ProxyProvider<AuthService, LocationService>(
           update: (_, authService, __) => LocationService(authService),
@@ -48,16 +54,25 @@ class MyApp extends StatelessWidget {
           update: (_, authService, __) => NotificationService(authService),
         ),
       ],
-      child: MaterialApp(
-        title: 'Driver App',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-          appBarTheme: const AppBarTheme(elevation: 0, centerTitle: true),
-        ),
-        home: const AuthenticationWrapper(),
-        debugShowCheckedModeBanner: false,
+      child: MyApp(),
+    ),
+  );
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Tracking System',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+        appBarTheme: const AppBarTheme(elevation: 0, centerTitle: true),
       ),
+      home: const AuthenticationWrapper(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
