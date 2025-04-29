@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../models/incident.dart';
 import '../utils/api_config.dart';
+import '../utils/api_utils.dart';
 import 'auth_service.dart';
 import 'location_service.dart';
 
@@ -21,14 +23,14 @@ class IncidentService {
     try {
       String? token = await _authService.getToken();
       if (token == null) {
-        print('Not authenticated, cannot report incident');
+        debugPrint('Not authenticated, cannot report incident');
         return false;
       }
 
       // Get current location
       final currentLocation = await _locationService.getCurrentLocation();
       if (currentLocation == null) {
-        print('Could not get current location for incident report');
+        debugPrint('Could not get current location for incident report');
         return false;
       }
 
@@ -39,44 +41,31 @@ class IncidentService {
       );
 
       // Add authorization header
-      request.headers.addAll({
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      });
+      request.headers.addAll({'Authorization': 'Bearer $token'});
 
       // Add text fields
-      request.fields.addAll({
-        'type': type,
-        'description': description,
-        'latitude': currentLocation.latitude.toString(),
-        'longitude': currentLocation.longitude.toString(),
-      });
+      request.fields['type'] = type;
+      request.fields['description'] = description;
+      request.fields['latitude'] = currentLocation.latitude.toString();
+      request.fields['longitude'] = currentLocation.longitude.toString();
 
-      // Add photo if available
+      // Add photo if provided
       if (photo != null) {
-        final photoStream = http.ByteStream(photo.openRead());
-        final photoLength = await photo.length();
-        final multipartFile = http.MultipartFile(
-          'photo',
-          photoStream,
-          photoLength,
-          filename: photo.path.split('/').last,
+        request.files.add(
+          await http.MultipartFile.fromPath('photo', photo.path),
         );
-        request.files.add(multipartFile);
       }
 
       // Send request
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      final response = await request.send();
+      debugPrint('Incident report response status: ${response.statusCode}');
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return true;
-      } else {
-        print('Failed to report incident: ${response.body}');
-        return false;
-      }
+      final responseBody = await response.stream.bytesToString();
+      debugPrint('Incident report response: $responseBody');
+
+      return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      print('Error reporting incident: $e');
+      debugPrint('Error reporting incident: $e');
       return false;
     }
   }
@@ -86,12 +75,12 @@ class IncidentService {
     try {
       String? token = await _authService.getToken();
       if (token == null) {
-        print('Not authenticated, cannot fetch incidents');
+        debugPrint('Not authenticated, cannot fetch incident history');
         return [];
       }
 
       final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/incidents'),
+        Uri.parse('${ApiConfig.baseUrl}${ApiConfig.getIncidents}'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -99,14 +88,17 @@ class IncidentService {
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> incidentsJson = jsonDecode(response.body)['data'];
-        return incidentsJson.map((json) => Incident.fromJson(json)).toList();
-      } else {
-        print('Failed to fetch incidents: ${response.body}');
-        return [];
+        final data = await safeApiCall(Future.value(response));
+        if (data != null && data['data'] != null) {
+          final List<dynamic> incidentsJson = data['data'];
+          return incidentsJson.map((json) => Incident.fromJson(json)).toList();
+        }
       }
+
+      debugPrint('Failed to fetch incident history: ${response.body}');
+      return [];
     } catch (e) {
-      print('Error fetching incidents: $e');
+      debugPrint('Error fetching incident history: $e');
       return [];
     }
   }

@@ -1,8 +1,7 @@
 class ApiConfig {
-  // Base URL - Change this to your Laravel backend URL
-  // For Android emulator, 10.0.2.2 points to host machine's localhost
-  // For iOS simulator, use localhost or 127.0.0.1
-  // For real devices, use your actual server IP or domain
+  // Base URL - Updated to work with emulators and real devices
+  // For Android emulator, use 10.0.2.2 instead of 127.0.0.1
+  // For iOS simulator, use localhost
   static const String baseUrl = 'http://127.0.0.1:8000';
 
   // Auth endpoints
@@ -14,9 +13,12 @@ class ApiConfig {
 
   // Incident endpoints
   static const String reportIncident = '/api/incidents/report';
+  static const String getIncidents = '/api/incidents';
 
   // SOS endpoints
   static const String sendSosAlert = '/api/sos/send';
+  static const String getActiveSosAlert = '/api/sos/active';
+  static const String cancelSosAlert = '/api/sos/{id}/cancel';
 
   // Notifications endpoints
   static const String getNotifications = '/api/notifications';
