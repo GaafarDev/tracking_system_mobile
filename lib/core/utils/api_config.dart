@@ -1,12 +1,4 @@
 class ApiConfig {
-<<<<<<< HEAD
-  // Use the correct base URL for your setup
-  // For Flutter web running on localhost:5965 connecting to Laravel on 127.0.0.1:8000
-=======
-  // Base URL - Updated to work with emulators and real devices
-  // For Android emulator, use 10.0.2.2 instead of 127.0.0.1
-  // For iOS simulator, use localhost
->>>>>>> c883a49c2529f53cf550c5e12fff0adf24eb8c77
   static const String baseUrl = 'http://127.0.0.1:8000';
 
   // Auth endpoints
