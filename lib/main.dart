@@ -24,37 +24,71 @@ void main() {
       providers: [
         // Register all required services
         Provider<AuthService>(create: (_) => AuthService()),
-        Provider<LocationService>(
-          create:
-              (context) => LocationService(
-                Provider.of<AuthService>(context, listen: false),
-              ),
-        ),
-        Provider<ScheduleService>(
-          create:
-              (context) => ScheduleService(
-                Provider.of<AuthService>(context, listen: false),
-              ),
-        ),
-        // Add other services with dependencies
+
+        // Fix: Remove duplicate LocationService registration and use ProxyProvider
         ProxyProvider<AuthService, LocationService>(
-          update: (_, authService, __) => LocationService(authService),
+          // Initialize with proper error handling
+          update: (_, authService, previousLocationService) {
+            try {
+              return previousLocationService ?? LocationService(authService);
+            } catch (e) {
+              debugPrint('Error initializing LocationService: $e');
+              rethrow;
+            }
+          },
         ),
+
+        ProxyProvider<AuthService, ScheduleService>(
+          update: (_, authService, previousScheduleService) {
+            try {
+              return previousScheduleService ?? ScheduleService(authService);
+            } catch (e) {
+              debugPrint('Error initializing ScheduleService: $e');
+              rethrow;
+            }
+          },
+        ),
+
+        // Fix: Ensure proper initialization of IncidentService
         ProxyProvider2<AuthService, LocationService, IncidentService>(
-          update:
-              (_, authService, locationService, __) =>
-                  IncidentService(authService, locationService),
+          update: (_, authService, locationService, previousIncidentService) {
+            try {
+              // Only create a new instance if needed
+              return previousIncidentService ??
+                  IncidentService(authService, locationService);
+            } catch (e) {
+              debugPrint('Error initializing IncidentService: $e');
+              rethrow;
+            }
+          },
         ),
+
+        // Fix: Ensure proper initialization of SosService
         ProxyProvider2<AuthService, LocationService, SosService>(
-          update:
-              (_, authService, locationService, __) =>
-                  SosService(authService, locationService),
+          update: (_, authService, locationService, previousSosService) {
+            try {
+              return previousSosService ??
+                  SosService(authService, locationService);
+            } catch (e) {
+              debugPrint('Error initializing SosService: $e');
+              rethrow;
+            }
+          },
         ),
+
         ProxyProvider<AuthService, NotificationService>(
-          update: (_, authService, __) => NotificationService(authService),
+          update: (_, authService, previousNotificationService) {
+            try {
+              return previousNotificationService ??
+                  NotificationService(authService);
+            } catch (e) {
+              debugPrint('Error initializing NotificationService: $e');
+              rethrow;
+            }
+          },
         ),
       ],
-      child: MyApp(),
+      child: const MyApp(),
     ),
   );
 }
@@ -94,8 +128,13 @@ class AuthenticationWrapper extends StatelessWidget {
         if (snapshot.data == true) {
           // User is logged in, load user data and navigate to home
           final authService = Provider.of<AuthService>(context, listen: false);
-          authService
-              .checkAuthentication(); // No need to await, it'll update providers when done
+          // Add error handling for authentication check
+          try {
+            authService.checkAuthentication();
+          } catch (e) {
+            debugPrint('Error checking authentication: $e');
+            // You may want to handle authentication errors here
+          }
 
           return const HomeScreen();
         }
