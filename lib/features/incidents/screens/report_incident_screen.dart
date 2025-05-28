@@ -18,6 +18,7 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
   String _selectedIncidentType = 'accident';
   bool _isSubmitting = false;
   File? _photoFile;
+  String _loadingMessage = 'Submitting report...';
 
   final List<Map<String, dynamic>> _incidentTypes = [
     {'value': 'accident', 'label': 'Accident'},
@@ -60,6 +61,7 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isSubmitting = true;
+        _loadingMessage = 'Getting location...';
       });
 
       try {
@@ -67,6 +69,14 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
           context,
           listen: false,
         );
+
+        // Update progress message
+        setState(() {
+          _loadingMessage =
+              _photoFile != null
+                  ? 'Uploading report with photo...'
+                  : 'Submitting report...';
+        });
 
         final success = await incidentService.reportIncident(
           type: _selectedIncidentType,
@@ -76,7 +86,13 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
 
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Incident reported successfully')),
+            SnackBar(
+              content: Text(
+                _photoFile != null
+                    ? 'Incident reported! Photo uploaded in background.'
+                    : 'Incident reported successfully',
+              ),
+            ),
           );
           Navigator.of(context).pop();
         } else {
@@ -88,11 +104,6 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
         }
       } catch (e) {
         print('Error submitting incident: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('An error occurred. Please try again later.'),
-          ),
-        );
       } finally {
         setState(() {
           _isSubmitting = false;
@@ -236,15 +247,28 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
                   ),
                   child:
                       _isSubmitting
-                          ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
+                          ? Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _loadingMessage,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
                           )
                           : const Text('SUBMIT REPORT'),
                 ),

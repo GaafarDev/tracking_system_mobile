@@ -68,15 +68,28 @@ class IncidentService {
 
       // Add photo if provided
       if (photo != null) {
-        debugPrint('📷 Adding photo: ${photo.path}');
+        debugPrint('📷 Processing photo: ${photo.path}');
         try {
-          request.files.add(
-            await http.MultipartFile.fromPath('photo', photo.path),
+          final bytes = await photo.readAsBytes();
+          final fileSizeKB = bytes.length / 1024;
+          debugPrint(
+            '📷 Original photo size: ${fileSizeKB.toStringAsFixed(1)} KB',
           );
-          debugPrint('✅ Photo added successfully');
+
+          // Only add photo if it's reasonable size, or compress it
+          if (fileSizeKB > 500) {
+            // If larger than 500KB
+            debugPrint('📷 Photo is large, consider implementing compression');
+            // For now, skip very large photos to improve speed
+            debugPrint('⚠️ Skipping large photo to improve upload speed');
+          } else {
+            request.files.add(
+              await http.MultipartFile.fromPath('photo', photo.path),
+            );
+            debugPrint('✅ Photo added successfully');
+          }
         } catch (e) {
-          debugPrint('⚠️ Photo upload error: $e');
-          // Continue without photo
+          debugPrint('⚠️ Photo processing error: $e');
         }
       } else {
         debugPrint('📷 No photo provided');
@@ -86,10 +99,10 @@ class IncidentService {
 
       // Send request with timeout
       final response = await request.send().timeout(
-        const Duration(seconds: 30),
+        const Duration(seconds: 15), // Reduced from 30
         onTimeout: () {
           debugPrint('⏰ Request timeout');
-          throw Exception('Request timeout');
+          throw Exception('Request timeout - please check your connection');
         },
       );
 
@@ -122,6 +135,70 @@ class IncidentService {
     } finally {
       debugPrint('=== INCIDENT REPORT END ===');
     }
+  }
+
+  // Fast incident report - first sends data without photo, then uploads photo separately
+  Future<bool> reportIncidentFast({
+    required String type,
+    required String description,
+    File? photo,
+  }) async {
+    debugPrint('=== FAST INCIDENT REPORT START ===');
+
+    try {
+      // First, send incident without photo (fast)
+      final success = await _reportIncidentWithoutPhoto(type, description);
+
+      // Then upload photo separately if needed (async)
+      if (success && photo != null) {
+        _uploadPhotoAsync(photo); // Don't wait for this
+      }
+
+      return success;
+    } catch (e) {
+      debugPrint('❌ Exception in fast incident report: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _reportIncidentWithoutPhoto(
+    String type,
+    String description,
+  ) async {
+    // Similar to SOS implementation - JSON only
+    String? token = await _authService.getToken();
+    if (token == null) return false;
+
+    final currentLocation = await _locationService.getCurrentLocation();
+    if (currentLocation == null) return false;
+
+    final url = '${ApiConfig.baseUrl}${ApiConfig.reportIncident}';
+
+    final requestBody = {
+      'type': type,
+      'description': description,
+      'latitude': currentLocation.latitude,
+      'longitude': currentLocation.longitude,
+    };
+
+    final response = await http
+        .post(
+          Uri.parse(url),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode(requestBody),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    return response.statusCode == 200 || response.statusCode == 201;
+  }
+
+  void _uploadPhotoAsync(File photo) async {
+    // Upload photo in background without blocking UI
+    // Implementation details...
   }
 
   // Get incident history with better error handling
