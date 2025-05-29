@@ -1,5 +1,3 @@
-// Replace lib/core/services/auth_service.dart with this enhanced version:
-
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -12,21 +10,18 @@ class AuthService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   User? _currentUser;
   Driver? _currentDriver;
+  String? _cachedToken; // Cache the token to avoid repeated reads
 
   User? get currentUser => _currentUser;
   Driver? get currentDriver => _currentDriver;
 
-  // Enhanced login method with debugging
+  // Optimized login method - reduced debugging
   Future<bool> login(String email, String password) async {
-    debugPrint('=== LOGIN START ===');
-    debugPrint('Email: $email');
+    debugPrint('🚀 Starting login for: $email');
 
     try {
       final url = '${ApiConfig.baseUrl}${ApiConfig.login}';
-      debugPrint('🌐 Login URL: $url');
-
       final requestBody = {'email': email, 'password': password};
-      debugPrint('📝 Request body: $requestBody');
 
       final response = await http
           .post(
@@ -37,79 +32,67 @@ class AuthService {
             },
             body: jsonEncode(requestBody),
           )
-          .timeout(const Duration(seconds: 30));
-
-      debugPrint('📡 Login response status: ${response.statusCode}');
-      debugPrint('📡 Login response body: ${response.body}');
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        // Save token with validation
+        // Save token and cache it
         if (data['token'] != null) {
           final token = data['token'].toString();
           await _storage.write(key: 'auth_token', value: token);
-          debugPrint('✅ Token saved: ${token.substring(0, 20)}...');
+          _cachedToken = token; // Cache the token
+          debugPrint('✅ Login successful');
         } else {
-          debugPrint('❌ No token in login response');
+          debugPrint('❌ No token in response');
           return false;
         }
 
         // Parse user data
         if (data['user'] != null) {
           _currentUser = User.fromJson(data['user']);
-          debugPrint('✅ User loaded: ${_currentUser!.name}');
         }
 
         // Parse driver data if available
         if (data['driver'] != null) {
           _currentDriver = Driver.fromJson(data['driver']);
-          debugPrint('✅ Driver loaded: ${_currentDriver!.licenseNumber}');
         }
 
-        debugPrint('✅ Login successful');
         return true;
       } else {
         debugPrint('❌ Login failed: ${response.statusCode}');
-        debugPrint('Error body: ${response.body}');
         return false;
       }
     } catch (e) {
-      debugPrint('❌ Login exception: $e');
+      debugPrint('❌ Login error: $e');
       return false;
-    } finally {
-      debugPrint('=== LOGIN END ===');
     }
   }
 
-  // Enhanced token retrieval with validation
+  // OPTIMIZED: Get token with caching to avoid repeated storage reads
   Future<String?> getToken() async {
     try {
+      // Return cached token if available
+      if (_cachedToken != null) {
+        return _cachedToken;
+      }
+
+      // Only read from storage if not cached
       final token = await _storage.read(key: 'auth_token');
       if (token != null) {
-        debugPrint('🔑 Token retrieved: ${token.substring(0, 20)}...');
-        // Validate token format
-        if (token.contains('|') && token.length > 40) {
-          debugPrint('✅ Token format looks valid');
-          return token;
-        } else {
-          debugPrint('⚠️ Token format looks invalid: $token');
-          return token; // Return anyway, let the server validate
-        }
-      } else {
-        debugPrint('❌ No token found in storage');
-        return null;
+        _cachedToken = token; // Cache for future use
+        return token;
       }
+
+      return null;
     } catch (e) {
       debugPrint('❌ Error getting token: $e');
       return null;
     }
   }
 
-  // Check authentication with enhanced debugging
+  // Optimized authentication check - reduced debugging
   Future<bool> checkAuthentication() async {
-    debugPrint('=== CHECKING AUTHENTICATION ===');
-
     final token = await getToken();
     if (token == null) {
       debugPrint('❌ No token available');
@@ -118,7 +101,6 @@ class AuthService {
 
     try {
       final url = '${ApiConfig.baseUrl}/api/user';
-      debugPrint('🌐 Auth check URL: $url');
 
       final response = await http
           .get(
@@ -129,48 +111,37 @@ class AuthService {
               'Accept': 'application/json',
             },
           )
-          .timeout(const Duration(seconds: 30));
-
-      debugPrint('📡 Auth check status: ${response.statusCode}');
-      debugPrint('📡 Auth check body: ${response.body}');
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final userData = jsonDecode(response.body);
         _currentUser = User.fromJson(userData);
-        debugPrint('✅ Authentication valid for user: ${_currentUser!.name}');
 
-        // Fetch driver information if needed
+        // Load driver info if needed
         await _loadDriverInfo();
 
+        debugPrint('✅ Authentication valid');
         return true;
       } else {
-        // Token invalid or expired
         debugPrint('❌ Authentication failed: ${response.statusCode}');
         await logout();
         return false;
       }
     } catch (e) {
-      debugPrint('❌ Authentication check error: $e');
+      debugPrint('❌ Auth check error: $e');
       return false;
     }
   }
 
-  // Load driver information with debugging
+  // Optimized driver info loading - reduced debugging
   Future<void> _loadDriverInfo() async {
-    if (_currentUser == null) {
-      debugPrint('❌ Cannot load driver info: no user loaded');
-      return;
-    }
+    if (_currentUser == null) return;
 
     try {
       final token = await getToken();
-      if (token == null) {
-        debugPrint('❌ Cannot load driver info: no token');
-        return;
-      }
+      if (token == null) return;
 
       final url = '${ApiConfig.baseUrl}/api/drivers/me';
-      debugPrint('🌐 Loading driver from: $url');
 
       final response = await http
           .get(
@@ -181,32 +152,24 @@ class AuthService {
               'Accept': 'application/json',
             },
           )
-          .timeout(const Duration(seconds: 30));
-
-      debugPrint('📡 Driver info status: ${response.statusCode}');
-      debugPrint('📡 Driver info body: ${response.body}');
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final driverData = jsonDecode(response.body);
         _currentDriver = Driver.fromJson(driverData);
-        debugPrint('✅ Driver info loaded: ${_currentDriver!.licenseNumber}');
-      } else {
-        debugPrint('❌ Failed to load driver info: ${response.statusCode}');
+        debugPrint('✅ Driver info loaded');
       }
     } catch (e) {
-      debugPrint('❌ Load driver info error: $e');
+      debugPrint('❌ Load driver error: $e');
     }
   }
 
-  // Logout method with cleanup
+  // Optimized logout - clear cache
   Future<void> logout() async {
-    debugPrint('=== LOGOUT START ===');
-
     try {
       String? token = await getToken();
       if (token != null) {
         final url = '${ApiConfig.baseUrl}${ApiConfig.logout}';
-        debugPrint('🌐 Logout URL: $url');
 
         await http
             .post(
@@ -217,27 +180,23 @@ class AuthService {
                 'Accept': 'application/json',
               },
             )
-            .timeout(const Duration(seconds: 30));
-
-        debugPrint('✅ Logout request sent');
+            .timeout(const Duration(seconds: 10));
       }
     } catch (e) {
       debugPrint('⚠️ Logout error: $e');
     } finally {
-      // Clear stored data regardless of logout success
+      // Clear all cached data
       await _storage.delete(key: 'auth_token');
+      _cachedToken = null;
       _currentUser = null;
       _currentDriver = null;
-      debugPrint('✅ Local data cleared');
-      debugPrint('=== LOGOUT END ===');
+      debugPrint('✅ Logout completed');
     }
   }
 
-  // Check if the user is logged in
+  // Check if logged in using cached token
   Future<bool> isLoggedIn() async {
     final token = await getToken();
-    final isLoggedIn = token != null;
-    debugPrint('🔍 Is logged in: $isLoggedIn');
-    return isLoggedIn;
+    return token != null;
   }
 }

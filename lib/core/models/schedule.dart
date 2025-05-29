@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart'; // Add this import for debugPrint
+
 class Schedule {
   final int id;
   final int routeId;
@@ -105,18 +108,37 @@ class Route {
   });
 
   factory Route.fromJson(Map<String, dynamic> json) {
+    // Helper function to parse waypoints/stops that might be strings or arrays
+    List<Map<String, dynamic>>? parsePointsData(dynamic data) {
+      if (data == null) return null;
+
+      if (data is String) {
+        // If it's a string, try to parse it as JSON
+        if (data.isEmpty || data == '[]') return [];
+
+        try {
+          final decoded = jsonDecode(data);
+          if (decoded is List) {
+            return List<Map<String, dynamic>>.from(decoded);
+          }
+        } catch (e) {
+          debugPrint('Error parsing points data: $e');
+          return [];
+        }
+      } else if (data is List) {
+        // If it's already a list, convert it
+        return List<Map<String, dynamic>>.from(data);
+      }
+
+      return [];
+    }
+
     return Route(
       id: json['id'],
       name: json['name'],
       description: json['description'],
-      waypoints:
-          json['waypoints'] != null
-              ? List<Map<String, dynamic>>.from(json['waypoints'])
-              : null,
-      stops:
-          json['stops'] != null
-              ? List<Map<String, dynamic>>.from(json['stops'])
-              : null,
+      waypoints: parsePointsData(json['waypoints']),
+      stops: parsePointsData(json['stops']),
       distanceKm:
           json['distance_km'] != null
               ? double.parse(json['distance_km'].toString())
