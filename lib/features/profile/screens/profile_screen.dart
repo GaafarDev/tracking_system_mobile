@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/auth_service.dart';
+import '../../auth/screens/login_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -93,7 +94,62 @@ class ProfileScreen extends StatelessWidget {
                     driver.status.substring(1),
                 valueColor: driver.isActive ? Colors.green : Colors.red,
               ),
+
+              const SizedBox(height: 32),
             ],
+
+            // Actions section
+            const Text(
+              'Actions',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+
+            // Logout button
+            Container(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.logout, color: Colors.white),
+                label: const Text(
+                  'Logout',
+                  style: TextStyle(color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () => _handleLogout(context),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // App info
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Tracking System Mobile',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Version 1.0.0',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -134,5 +190,36 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _handleLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Logout'),
+            content: const Text('Are you sure you want to logout?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Logout'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed == true) {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.logout();
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 }

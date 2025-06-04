@@ -110,13 +110,43 @@ class ScheduleService {
   }
 
   // Get today's schedules
-  Future<List<Schedule>> getTodaySchedules() async {
-    debugPrint('🔄 Fetching today\'s schedules...');
-    final allSchedules = await getSchedules();
-    final todaySchedules =
-        allSchedules.where((schedule) => schedule.isToday).toList();
-    debugPrint('📋 Found ${todaySchedules.length} schedules for today');
-    return todaySchedules;
+  Future<List<Schedule>> getTodaysSchedules() async {
+    try {
+      final allSchedules = await getSchedules();
+      final today = DateTime.now();
+      final todayName = _getDayName(today.weekday);
+
+      return allSchedules
+          .where(
+            (schedule) =>
+                schedule.dayOfWeek.toLowerCase() == todayName.toLowerCase(),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint('Error getting today\'s schedules: $e');
+      return [];
+    }
+  }
+
+  String _getDayName(int weekday) {
+    switch (weekday) {
+      case 1:
+        return 'Monday';
+      case 2:
+        return 'Tuesday';
+      case 3:
+        return 'Wednesday';
+      case 4:
+        return 'Thursday';
+      case 5:
+        return 'Friday';
+      case 6:
+        return 'Saturday';
+      case 7:
+        return 'Sunday';
+      default:
+        return 'Monday';
+    }
   }
 
   // Get schedules for specific day

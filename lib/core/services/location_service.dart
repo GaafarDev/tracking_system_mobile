@@ -20,6 +20,10 @@ class LocationService {
   bool _isTracking = false;
   bool get isTracking => _isTracking;
 
+  // Add request throttling
+  DateTime? _lastLocationUpdate;
+  bool _isUpdatingLocation = false;
+
   LocationService(this._authService);
 
   // Optimized initialization
@@ -91,6 +95,18 @@ class LocationService {
 
   // Optimized server update - Use cached token
   Future<bool> _sendLocationToServer(int vehicleId, String token) async {
+    // Prevent duplicate requests
+    if (_isUpdatingLocation) return true;
+
+    final now = DateTime.now();
+    if (_lastLocationUpdate != null &&
+        now.difference(_lastLocationUpdate!).inSeconds < 25) {
+      return true; // Skip if updated recently
+    }
+
+    _isUpdatingLocation = true;
+    _lastLocationUpdate = now;
+
     try {
       if (_lastLocation == null) {
         _lastLocation = await _location.getLocation();
@@ -112,12 +128,14 @@ class LocationService {
               'vehicle_id': vehicleId,
             }),
           )
-          .timeout(const Duration(seconds: 5)); // Short timeout
+          .timeout(const Duration(seconds: 3)); // Reduced timeout
 
       return response.statusCode == 200;
     } catch (e) {
       debugPrint('❌ Location update error: $e');
       return false;
+    } finally {
+      _isUpdatingLocation = false;
     }
   }
 

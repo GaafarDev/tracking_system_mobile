@@ -1,36 +1,11 @@
-// lib/features/profile/screens/modern_profile_screen.dart
+// lib/features/profile/screens/profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/auth_service.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/custom_widgets.dart';
+import '../../auth/screens/login_screen.dart';
 
-class ModernProfileScreen extends StatefulWidget {
-  const ModernProfileScreen({Key? key}) : super(key: key);
-
-  @override
-  _ModernProfileScreenState createState() => _ModernProfileScreenState();
-}
-
-class _ModernProfileScreenState extends State<ModernProfileScreen>
-    with TickerProviderStateMixin {
-  late AnimationController _animationController;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    );
-    _animationController.forward();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
+class ProfileScreen extends StatelessWidget {
+  const ProfileScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -39,429 +14,174 @@ class _ModernProfileScreenState extends State<ModernProfileScreen>
     final driver = authService.currentDriver;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      extendBodyBehindAppBar: true,
-      appBar: CustomAppBar(
-        title: 'My Profile',
-        backgroundColor: Colors.transparent,
-      ),
-      body: Container(
-        decoration:
-            AppTheme.backgroundGradient != null
-                ? const BoxDecoration(gradient: AppTheme.backgroundGradient)
-                : null,
-        child: SafeArea(
-          child: AnimatedBuilder(
-            animation: _animationController,
-            builder: (context, child) {
-              return FadeTransition(
-                opacity: _animationController,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 0.3),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(
-                      parent: _animationController,
-                      curve: Curves.easeOutBack,
+      appBar: AppBar(title: const Text('My Profile')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Profile header with user info
+            Center(
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 50,
+                    backgroundColor: Colors.blue[100],
+                    child: Text(
+                      user?.name?.isNotEmpty == true
+                          ? user!.name.substring(0, 1).toUpperCase()
+                          : 'D',
+                      style: TextStyle(
+                        fontSize: 40,
+                        color: Theme.of(context).primaryColor,
+                      ),
                     ),
                   ),
-                  child: _buildContent(user, driver),
+                  const SizedBox(height: 16),
+                  Text(
+                    user?.name ?? 'Driver',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    user?.email ?? '',
+                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            // Driver info
+            if (driver != null) ...[
+              const Text(
+                'Driver Information',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+
+              _buildInfoItem(
+                icon: Icons.badge,
+                label: 'License Number',
+                value: driver.licenseNumber,
+              ),
+
+              const Divider(),
+
+              _buildInfoItem(
+                icon: Icons.phone,
+                label: 'Phone Number',
+                value: driver.phoneNumber,
+              ),
+
+              const Divider(),
+
+              _buildInfoItem(
+                icon: Icons.location_on,
+                label: 'Address',
+                value: driver.address ?? 'Not provided',
+              ),
+
+              const Divider(),
+
+              _buildInfoItem(
+                icon: Icons.verified_user,
+                label: 'Status',
+                value:
+                    driver.status.substring(0, 1).toUpperCase() +
+                    driver.status.substring(1),
+                valueColor: driver.isActive ? Colors.green : Colors.red,
+              ),
+
+              const SizedBox(height: 32),
+            ],
+
+            // Actions section
+            const Text(
+              'Actions',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+
+            // Logout button
+            Container(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.logout, color: Colors.white),
+                label: const Text(
+                  'Logout',
+                  style: TextStyle(color: Colors.white),
                 ),
-              );
-            },
-          ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () => _handleLogout(context),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // App info
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Tracking System Mobile',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Version 1.0.0',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildContent(user, driver) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.spacingMedium),
-      child: Column(
-        children: [
-          // Profile Header
-          _buildProfileHeader(user, driver),
-
-          const SizedBox(height: AppTheme.spacingLarge),
-
-          // Account Information
-          _buildAccountInfoCard(user),
-
-          const SizedBox(height: AppTheme.spacingLarge),
-
-          // Driver Information
-          if (driver != null) ...[
-            _buildDriverInfoCard(driver),
-            const SizedBox(height: AppTheme.spacingLarge),
-          ],
-
-          // Settings and Actions
-          _buildSettingsCard(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfileHeader(user, driver) {
-    return GlassCard(
-      child: Column(
-        children: [
-          // Profile Picture with Status
-          Stack(
-            children: [
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: AppTheme.goldGradient,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primaryGold.withOpacity(0.4),
-                      blurRadius: 20,
-                      spreadRadius: 5,
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    user?.name?.isNotEmpty == true
-                        ? user!.name.substring(0, 1).toUpperCase()
-                        : 'D',
-                    style: const TextStyle(
-                      fontSize: 40,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              if (driver != null)
-                Positioned(
-                  bottom: 5,
-                  right: 5,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color:
-                          driver.isActive ? AppTheme.success : AppTheme.danger,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (driver.isActive
-                                  ? AppTheme.success
-                                  : AppTheme.danger)
-                              .withOpacity(0.4),
-                          blurRadius: 8,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      driver.isActive ? Icons.check : Icons.close,
-                      color: Colors.white,
-                      size: 12,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-
-          const SizedBox(height: AppTheme.spacingLarge),
-
-          // Name and Email
-          Text(
-            user?.name ?? 'Driver',
-            style: AppTheme.heading1.copyWith(fontSize: 24),
-            textAlign: TextAlign.center,
-          ),
-
-          const SizedBox(height: AppTheme.spacingSmall),
-
-          Text(
-            user?.email ?? '',
-            style: AppTheme.bodyLarge.copyWith(color: Colors.grey[600]),
-            textAlign: TextAlign.center,
-          ),
-
-          const SizedBox(height: AppTheme.spacingMedium),
-
-          // Status Badge
-          if (driver != null)
-            StatusBadge(
-              text: driver.isActive ? 'Active Driver' : 'Inactive',
-              color: driver.isActive ? AppTheme.success : AppTheme.danger,
-              icon: driver.isActive ? Icons.verified : Icons.pause_circle,
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAccountInfoCard(user) {
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppTheme.spacingMedium),
-                decoration: BoxDecoration(
-                  gradient: AppTheme.primaryGradient,
-                  borderRadius: BorderRadius.circular(
-                    AppTheme.borderRadiusMedium,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.account_circle,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: AppTheme.spacingMedium),
-              Text(
-                'Account Information',
-                style: AppTheme.heading3.copyWith(color: AppTheme.primaryRed),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppTheme.spacingLarge),
-
-          _buildInfoRow(
-            icon: Icons.person,
-            label: 'Full Name',
-            value: user?.name ?? 'Not provided',
-          ),
-
-          const SizedBox(height: AppTheme.spacingMedium),
-
-          _buildInfoRow(
-            icon: Icons.email,
-            label: 'Email Address',
-            value: user?.email ?? 'Not provided',
-          ),
-
-          const SizedBox(height: AppTheme.spacingMedium),
-
-          _buildInfoRow(
-            icon: Icons.verified_user,
-            label: 'Email Status',
-            value: user?.emailVerifiedAt != null ? 'Verified' : 'Not Verified',
-            valueColor:
-                user?.emailVerifiedAt != null
-                    ? AppTheme.success
-                    : AppTheme.warning,
-          ),
-
-          const SizedBox(height: AppTheme.spacingMedium),
-
-          _buildInfoRow(
-            icon: Icons.calendar_today,
-            label: 'Member Since',
-            value:
-                user?.emailVerifiedAt != null
-                    ? '${user!.emailVerifiedAt!.day}/${user.emailVerifiedAt!.month}/${user.emailVerifiedAt!.year}'
-                    : 'Unknown',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDriverInfoCard(driver) {
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppTheme.spacingMedium),
-                decoration: BoxDecoration(
-                  gradient: AppTheme.goldGradient,
-                  borderRadius: BorderRadius.circular(
-                    AppTheme.borderRadiusMedium,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.local_shipping,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: AppTheme.spacingMedium),
-              Text(
-                'Driver Information',
-                style: AppTheme.heading3.copyWith(color: AppTheme.primaryGold),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppTheme.spacingLarge),
-
-          _buildInfoRow(
-            icon: Icons.badge,
-            label: 'License Number',
-            value: driver.licenseNumber,
-          ),
-
-          const SizedBox(height: AppTheme.spacingMedium),
-
-          _buildInfoRow(
-            icon: Icons.phone,
-            label: 'Phone Number',
-            value: driver.phoneNumber,
-          ),
-
-          const SizedBox(height: AppTheme.spacingMedium),
-
-          _buildInfoRow(
-            icon: Icons.location_on,
-            label: 'Address',
-            value: driver.address ?? 'Not provided',
-          ),
-
-          const SizedBox(height: AppTheme.spacingMedium),
-
-          _buildInfoRow(
-            icon: Icons.circle,
-            label: 'Driver Status',
-            value:
-                driver.status.substring(0, 1).toUpperCase() +
-                driver.status.substring(1),
-            valueColor: driver.isActive ? AppTheme.success : AppTheme.danger,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettingsCard() {
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppTheme.spacingMedium),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppTheme.info, AppTheme.info.withOpacity(0.8)],
-                  ),
-                  borderRadius: BorderRadius.circular(
-                    AppTheme.borderRadiusMedium,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.settings,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: AppTheme.spacingMedium),
-              Text(
-                'Settings & Actions',
-                style: AppTheme.heading3.copyWith(color: AppTheme.info),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppTheme.spacingLarge),
-
-          // Settings Options
-          _buildSettingOption(
-            icon: Icons.edit,
-            title: 'Edit Profile',
-            subtitle: 'Update your personal information',
-            onTap: () {
-              _showComingSoonDialog('Edit Profile');
-            },
-          ),
-
-          const SizedBox(height: AppTheme.spacingMedium),
-
-          _buildSettingOption(
-            icon: Icons.lock,
-            title: 'Change Password',
-            subtitle: 'Update your account password',
-            onTap: () {
-              _showComingSoonDialog('Change Password');
-            },
-          ),
-
-          const SizedBox(height: AppTheme.spacingMedium),
-
-          _buildSettingOption(
-            icon: Icons.notifications,
-            title: 'Notification Settings',
-            subtitle: 'Manage your notification preferences',
-            onTap: () {
-              _showComingSoonDialog('Notification Settings');
-            },
-          ),
-
-          const SizedBox(height: AppTheme.spacingMedium),
-
-          _buildSettingOption(
-            icon: Icons.help,
-            title: 'Help & Support',
-            subtitle: 'Get assistance and contact support',
-            onTap: () {
-              _showComingSoonDialog('Help & Support');
-            },
-          ),
-
-          const SizedBox(height: AppTheme.spacingMedium),
-
-          _buildSettingOption(
-            icon: Icons.info,
-            title: 'About',
-            subtitle: 'App version and information',
-            onTap: () {
-              _showAboutDialog();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow({
+  Widget _buildInfoItem({
     required IconData icon,
     required String label,
     required String value,
     Color? valueColor,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.spacingMedium),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Colors.grey[600]),
-          const SizedBox(width: AppTheme.spacingMedium),
+          Icon(icon, size: 24, color: Colors.grey[600]),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   label,
-                  style: AppTheme.bodyMedium.copyWith(color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
-                const SizedBox(height: 4),
                 Text(
                   value,
-                  style: AppTheme.bodyLarge.copyWith(
-                    fontWeight: FontWeight.w600,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
                     color: valueColor,
                   ),
                 ),
@@ -473,144 +193,34 @@ class _ModernProfileScreenState extends State<ModernProfileScreen>
     );
   }
 
-  Widget _buildSettingOption({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
-        child: Container(
-          padding: const EdgeInsets.all(AppTheme.spacingMedium),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppTheme.spacingSmall),
-                decoration: BoxDecoration(
-                  color: AppTheme.info.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(
-                    AppTheme.borderRadiusSmall,
-                  ),
-                ),
-                child: Icon(icon, color: AppTheme.info, size: 20),
-              ),
-              const SizedBox(width: AppTheme.spacingMedium),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: AppTheme.bodyLarge.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: AppTheme.bodyMedium.copyWith(
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showComingSoonDialog(String feature) {
-    showDialog(
+  Future<void> _handleLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
-          ),
-          title: Row(
-            children: [
-              Icon(Icons.info_outline, color: AppTheme.info),
-              const SizedBox(width: AppTheme.spacingSmall),
-              Text('Coming Soon'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Logout'),
+            content: const Text('Are you sure you want to logout?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Logout'),
+              ),
             ],
           ),
-          content: Text(
-            '$feature feature will be available in a future update.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('OK', style: TextStyle(color: AppTheme.primaryRed)),
-            ),
-          ],
-        );
-      },
     );
-  }
 
-  void _showAboutDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
-          ),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: AppTheme.goldGradient,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.local_shipping,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: AppTheme.spacingSmall),
-              const Text('About'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Driver Tracking System', style: AppTheme.heading3),
-              const SizedBox(height: AppTheme.spacingSmall),
-              Text('Version 1.0.0'),
-              const SizedBox(height: AppTheme.spacingMedium),
-              Text(
-                'A comprehensive solution for driver management and tracking.',
-                style: AppTheme.bodyMedium,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Close',
-                style: TextStyle(color: AppTheme.primaryRed),
-              ),
-            ),
-          ],
-        );
-      },
-    );
+    if (confirmed == true) {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.logout();
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 }

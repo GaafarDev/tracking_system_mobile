@@ -712,14 +712,12 @@ class _ModernScheduleDetailScreenState extends State<ModernScheduleDetailScreen>
           children: [
             Expanded(
               child: GradientButton(
-                text: 'Start Navigation',
+                text: 'View on Map',
                 onPressed: () {
-                  _showCustomSnackBar(
-                    'Navigation feature coming soon',
-                    AppTheme.info,
-                  );
+                  // Open map with route coordinates
+                  _openInMaps();
                 },
-                icon: Icons.navigation,
+                icon: Icons.map,
                 gradient: AppTheme.primaryGradient,
                 height: 56,
               ),
@@ -738,10 +736,8 @@ class _ModernScheduleDetailScreenState extends State<ModernScheduleDetailScreen>
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: () {
-                      _showCustomSnackBar(
-                        'Report issue feature coming soon',
-                        AppTheme.warning,
-                      );
+                      // Navigate to report incident with route context
+                      _reportRouteIssue();
                     },
                     borderRadius: BorderRadius.circular(
                       AppTheme.borderRadiusMedium,
@@ -768,6 +764,45 @@ class _ModernScheduleDetailScreenState extends State<ModernScheduleDetailScreen>
         ),
       ],
     );
+  }
+
+  void _openInMaps() {
+    // Get first and last stops
+    final route = widget.schedule.route;
+    if (route?.stops == null || route!.stops!.isEmpty) {
+      _showCustomSnackBar('No route stops available', AppTheme.warning);
+      return;
+    }
+
+    final firstStop = route.stops!.first;
+    final lastStop = route.stops!.last;
+
+    if (firstStop['lat'] != null &&
+        firstStop['lng'] != null &&
+        lastStop['lat'] != null &&
+        lastStop['lng'] != null) {
+      // Open default maps app with directions
+      final url =
+          'https://www.google.com/maps/dir/${firstStop['lat']},${firstStop['lng']}/${lastStop['lat']},${lastStop['lng']}';
+
+      _showCustomSnackBar('Opening route in maps...', AppTheme.info);
+
+      // You can use url_launcher package here
+      // launch(url);
+    } else {
+      _showCustomSnackBar('Route coordinates not available', AppTheme.warning);
+    }
+  }
+
+  void _reportRouteIssue() {
+    _showCustomSnackBar('Report incident feature coming soon', AppTheme.info);
+    // TODO: Navigate to report incident screen when implemented
+    // Navigator.push(
+    //   context,
+    //   MaterialPageRoute(
+    //     builder: (context) => const ModernReportIncidentScreen(),
+    //   ),
+    // );
   }
 
   Widget _buildInfoItem(

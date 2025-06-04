@@ -424,8 +424,8 @@ class ModernAppDrawer extends StatelessWidget {
   }
 
   void _navigateToProfile(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const ModernProfileScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const ProfileScreen()));
   }
 }

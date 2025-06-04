@@ -12,6 +12,8 @@ import '../../incidents/screens/modern_report_incident_screen.dart';
 import '../../sos/screens/modern_sos_screen.dart';
 import '../../schedules/screens/modern_schedule_list_screen.dart';
 import '../../notifications/screens/modern_notification_list_screen.dart';
+import '../../../core/services/schedule_service.dart';
+import '../../../core/models/schedule.dart';
 
 class ModernHomeScreen extends StatefulWidget {
   const ModernHomeScreen({Key? key}) : super(key: key);
@@ -305,7 +307,7 @@ class _ModernHomeScreenState extends State<ModernHomeScreen>
         const SizedBox(height: AppTheme.spacingLarge),
 
         // Today's Schedule Preview
-        _buildTodaySchedule(),
+        _buildTodaysScheduleCard(),
       ],
     );
   }
@@ -541,86 +543,210 @@ class _ModernHomeScreenState extends State<ModernHomeScreen>
     );
   }
 
-  Widget _buildTodaySchedule() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Today\'s Schedule', style: AppTheme.heading2),
-            TextButton.icon(
-              onPressed:
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ModernScheduleListScreen(),
-                    ),
-                  ),
-              icon: const Icon(Icons.arrow_forward_ios, size: 16),
-              label: const Text('View All'),
-              style: TextButton.styleFrom(foregroundColor: AppTheme.primaryRed),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppTheme.spacingMedium),
+  Widget _buildTodaysScheduleCard() {
+    return Consumer<ScheduleService>(
+      builder: (context, scheduleService, child) {
+        return FutureBuilder<List<Schedule>>(
+          future: scheduleService.getTodaysSchedules(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return _buildScheduleLoadingCard();
+            }
 
-        GlassCard(
-          child: Column(
-            children: [
-              Row(
+            final todaysSchedules = snapshot.data ?? [];
+
+            if (todaysSchedules.isEmpty) {
+              return _buildNoScheduleCard();
+            }
+
+            return GlassCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: AppTheme.goldGradient,
-                      borderRadius: BorderRadius.circular(
-                        AppTheme.borderRadiusMedium,
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(AppTheme.spacingMedium),
+                        decoration: BoxDecoration(
+                          gradient: AppTheme.goldGradient,
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.borderRadiusMedium,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.today,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: AppTheme.spacingMedium),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Today\'s Schedule',
+                              style: AppTheme.heading3.copyWith(
+                                color: AppTheme.primaryGold,
+                              ),
+                            ),
+                            Text(
+                              '${todaysSchedules.length} route${todaysSchedules.length == 1 ? '' : 's'} scheduled',
+                              style: AppTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: AppTheme.spacingLarge),
+
+                  // Show actual schedules
+                  ...todaysSchedules
+                      .take(2)
+                      .map((schedule) => _buildScheduleItem(schedule))
+                      .toList(),
+
+                  if (todaysSchedules.length > 2) ...[
+                    const SizedBox(height: AppTheme.spacingMedium),
+                    Center(
+                      child: Text(
+                        '+${todaysSchedules.length - 2} more',
+                        style: AppTheme.bodyMedium.copyWith(
+                          color: AppTheme.primaryGold,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                    child: const Icon(
-                      Icons.schedule,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: AppTheme.spacingMedium),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Morning Route', style: AppTheme.heading3),
-                        const SizedBox(height: 4),
-                        Text('08:00 AM - 12:00 PM', style: AppTheme.bodyMedium),
-                      ],
-                    ),
-                  ),
-                  StatusBadge(
-                    text: 'Upcoming',
-                    color: AppTheme.info,
-                    icon: Icons.schedule,
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppTheme.spacingMedium),
-              const Divider(),
-              const SizedBox(height: AppTheme.spacingMedium),
-              Row(
-                children: [
-                  Icon(Icons.route, color: Colors.grey[600], size: 16),
-                  const SizedBox(width: AppTheme.spacingSmall),
-                  Expanded(
-                    child: Text(
-                      'City Center Route - 15 stops',
-                      style: AppTheme.bodyMedium,
+                  ],
+
+                  const SizedBox(height: AppTheme.spacingLarge),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: GradientButton(
+                      text: 'View All Schedules',
+                      onPressed:
+                          () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder:
+                                  (context) => const ModernScheduleListScreen(),
+                            ),
+                          ),
+                      icon: Icons.calendar_today,
+                      height: 44,
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildScheduleItem(Schedule schedule) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppTheme.spacingMedium),
+      padding: const EdgeInsets.all(AppTheme.spacingMedium),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.primaryRed.withOpacity(0.1),
+            AppTheme.primaryGold.withOpacity(0.1),
+          ],
         ),
-      ],
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+        border: Border.all(
+          color:
+              schedule.isActive
+                  ? AppTheme.success.withOpacity(0.3)
+                  : AppTheme.warning.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: schedule.isActive ? AppTheme.success : AppTheme.warning,
+              borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
+            ),
+            child: Icon(
+              schedule.isActive ? Icons.directions_bus : Icons.pause,
+              color: Colors.white,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: AppTheme.spacingMedium),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  schedule.route?.name ?? 'Route #${schedule.routeId}',
+                  style: AppTheme.heading3.copyWith(fontSize: 14),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.schedule, size: 12, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${schedule.departureTime} - ${schedule.arrivalTime}',
+                      style: AppTheme.bodyMedium.copyWith(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          StatusBadge(
+            text: schedule.isActive ? 'Active' : 'Inactive',
+            color: schedule.isActive ? AppTheme.success : AppTheme.warning,
+            icon: schedule.isActive ? Icons.check_circle : Icons.pause,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoScheduleCard() {
+    return GlassCard(
+      child: Column(
+        children: [
+          Icon(Icons.calendar_today, size: 48, color: Colors.grey[400]),
+          const SizedBox(height: AppTheme.spacingMedium),
+          Text(
+            'No Schedule Today',
+            style: AppTheme.heading3.copyWith(color: Colors.grey[600]),
+          ),
+          const SizedBox(height: AppTheme.spacingSmall),
+          Text(
+            'You have no scheduled routes for today',
+            style: AppTheme.bodyMedium.copyWith(color: Colors.grey[500]),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduleLoadingCard() {
+    return GlassCard(
+      child: Column(
+        children: [
+          const CircularProgressIndicator(color: AppTheme.primaryGold),
+          const SizedBox(height: AppTheme.spacingMedium),
+          Text(
+            'Loading schedule...',
+            style: AppTheme.bodyMedium.copyWith(color: Colors.grey[600]),
+          ),
+        ],
+      ),
     );
   }
 

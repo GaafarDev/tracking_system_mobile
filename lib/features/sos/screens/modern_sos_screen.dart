@@ -96,10 +96,14 @@ class _ModernSosScreenState extends State<ModernSosScreen>
       return;
     }
 
+    // Show immediate feedback
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
+
+    // Show optimistic UI immediately
+    _showCustomSnackBar('Sending emergency alert...', AppTheme.info);
 
     try {
       final sosService = Provider.of<SosService>(context, listen: false);
@@ -108,7 +112,11 @@ class _ModernSosScreenState extends State<ModernSosScreen>
         listen: false,
       );
 
-      await locationService.initialize();
+      // Initialize in parallel
+      final futures = await Future.wait([
+        locationService.initialize(),
+        Future.delayed(Duration.zero), // Placeholder for any other init
+      ]);
 
       final success = await sosService.sendSosAlert(
         _messageController.text.trim(),
@@ -122,19 +130,21 @@ class _ModernSosScreenState extends State<ModernSosScreen>
         });
 
         _pulseController.repeat(reverse: true);
-        _showCustomSnackBar('SOS alert sent successfully', AppTheme.success);
+        _showCustomSnackBar('✅ Emergency alert sent!', AppTheme.success);
       } else {
         setState(() {
           _errorMessage = 'Failed to send SOS alert. Please try again.';
           _isLoading = false;
         });
+        _showCustomSnackBar('❌ Failed to send alert', AppTheme.danger);
       }
     } catch (e) {
       print('Error sending SOS alert: $e');
       setState(() {
-        _errorMessage = 'An error occurred. Please try again later.';
+        _errorMessage = 'Network error. Please check connection.';
         _isLoading = false;
       });
+      _showCustomSnackBar('❌ Network error', AppTheme.danger);
     }
   }
 
