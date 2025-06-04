@@ -10,35 +10,40 @@ class SosService {
   final AuthService _authService;
   final LocationService _locationService;
   SosAlert? _activeAlert;
+  String? _cachedToken; // Cache token to avoid repeated reads
 
   SosService(this._authService, this._locationService);
 
   SosAlert? get activeAlert => _activeAlert;
 
-  // ULTRA-FAST SOS - Get token once and reuse
+  // ULTRA-FAST SOS - Pre-cache token and location
   Future<bool> sendSosAlert(String message) async {
     try {
-      // Check if already have active alert (no API call needed)
-      if (_activeAlert != null && _activeAlert!.isActive) {
-        debugPrint('❌ Already have active SOS');
-        return false;
-      }
+      debugPrint('🚨 Starting SOS alert...');
 
-      // Get token ONCE
-      String? token = await _authService.getToken();
+      // Get cached token immediately - no await needed if cached
+      String? token = _cachedToken ?? await _authService.getToken();
       if (token == null) {
-        debugPrint('❌ No token');
+        debugPrint('❌ No token available');
         return false;
       }
+      _cachedToken = token; // Cache for future use
 
-      // Get location (this should be fast since it's already initialized)
-      final location = await _locationService.getCurrentLocation();
+      // Use last known location immediately (should be available from tracking)
+      final location =
+          _locationService.lastLocation ??
+          await _locationService.getCurrentLocation();
+
       if (location == null) {
-        debugPrint('❌ No location');
+        debugPrint('❌ No location available');
         return false;
       }
 
-      // Send SOS request - single API call
+      debugPrint(
+        '📍 Using location: ${location.latitude}, ${location.longitude}',
+      );
+
+      // Send SOS with minimal payload - single API call
       final response = await http
           .post(
             Uri.parse('${ApiConfig.baseUrl}${ApiConfig.sendSosAlert}'),
@@ -53,18 +58,20 @@ class SosService {
               'message': message,
             }),
           )
-          .timeout(const Duration(seconds: 8)); // Shorter timeout
+          .timeout(const Duration(seconds: 5)); // Reduced timeout
+
+      debugPrint('📡 SOS response: ${response.statusCode}');
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['sos_alert'] != null) {
           _activeAlert = SosAlert.fromJson(data['sos_alert']);
-          debugPrint('✅ SOS sent');
+          debugPrint('✅ SOS sent successfully');
           return true;
         }
       }
 
-      debugPrint('❌ SOS failed: ${response.statusCode}');
+      debugPrint('❌ SOS failed: ${response.statusCode} - ${response.body}');
       return false;
     } catch (e) {
       debugPrint('❌ SOS error: $e');
@@ -72,11 +79,25 @@ class SosService {
     }
   }
 
-  // FAST active SOS check - Get token once
+  // Pre-cache token and check for active alerts
+  Future<void> initialize() async {
+    try {
+      _cachedToken = await _authService.getToken();
+      if (_cachedToken != null) {
+        await getActiveSosAlert();
+      }
+    } catch (e) {
+      debugPrint('⚠️ SOS service initialization error: $e');
+    }
+  }
+
+  // FAST active SOS check - use cached token
   Future<SosAlert?> getActiveSosAlert() async {
     try {
-      String? token = await _authService.getToken();
+      String? token = _cachedToken ?? await _authService.getToken();
       if (token == null) return null;
+
+      _cachedToken = token; // Update cache
 
       final response = await http
           .get(
@@ -87,7 +108,7 @@ class SosService {
               'Accept': 'application/json',
             },
           )
-          .timeout(const Duration(seconds: 5)); // Very short timeout
+          .timeout(const Duration(seconds: 3)); // Very short timeout
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -105,7 +126,7 @@ class SosService {
     }
   }
 
-  // FAST SOS cancellation - Get token once
+  // FAST SOS cancellation - use cached token
   Future<bool> cancelSosAlert() async {
     if (_activeAlert == null) {
       debugPrint('❌ No SOS to cancel');
@@ -113,7 +134,7 @@ class SosService {
     }
 
     try {
-      String? token = await _authService.getToken();
+      String? token = _cachedToken ?? await _authService.getToken();
       if (token == null) return false;
 
       String url =
@@ -129,7 +150,7 @@ class SosService {
               'Accept': 'application/json',
             },
           )
-          .timeout(const Duration(seconds: 5)); // Very short timeout
+          .timeout(const Duration(seconds: 3)); // Very short timeout
 
       if (response.statusCode == 200) {
         _activeAlert = null;
@@ -143,5 +164,11 @@ class SosService {
       debugPrint('❌ Cancel error: $e');
       return false;
     }
+  }
+
+  // Clear cached data on logout
+  void clearCache() {
+    _cachedToken = null;
+    _activeAlert = null;
   }
 }

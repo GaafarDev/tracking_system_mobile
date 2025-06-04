@@ -1,3 +1,4 @@
+// lib/main.dart - Updated with Modern Theme
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
@@ -7,8 +8,9 @@ import 'core/services/incident_service.dart';
 import 'core/services/sos_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/schedule_service.dart';
-import 'features/auth/screens/login_screen.dart';
-import 'features/home/screens/home_screen.dart';
+import 'core/theme/app_theme.dart';
+import 'features/auth/screens/modern_login_screen.dart';
+import 'features/home/screens/modern_home_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,15 +21,24 @@ void main() {
     DeviceOrientation.portraitDown,
   ]);
 
+  // Set system UI overlay style
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
+
   runApp(
     MultiProvider(
       providers: [
         // Register all required services
         Provider<AuthService>(create: (_) => AuthService()),
 
-        // Fix: Remove duplicate LocationService registration and use ProxyProvider
+        // Location Service with proper error handling
         ProxyProvider<AuthService, LocationService>(
-          // Initialize with proper error handling
           update: (_, authService, previousLocationService) {
             try {
               return previousLocationService ?? LocationService(authService);
@@ -38,6 +49,7 @@ void main() {
           },
         ),
 
+        // Schedule Service
         ProxyProvider<AuthService, ScheduleService>(
           update: (_, authService, previousScheduleService) {
             try {
@@ -49,11 +61,10 @@ void main() {
           },
         ),
 
-        // Fix: Ensure proper initialization of IncidentService
+        // Incident Service
         ProxyProvider2<AuthService, LocationService, IncidentService>(
           update: (_, authService, locationService, previousIncidentService) {
             try {
-              // Only create a new instance if needed
               return previousIncidentService ??
                   IncidentService(authService, locationService);
             } catch (e) {
@@ -63,12 +74,16 @@ void main() {
           },
         ),
 
-        // Fix: Ensure proper initialization of SosService
+        // SOS Service
         ProxyProvider2<AuthService, LocationService, SosService>(
           update: (_, authService, locationService, previousSosService) {
             try {
-              return previousSosService ??
+              final sosService =
+                  previousSosService ??
                   SosService(authService, locationService);
+              // Initialize the service with cached token
+              sosService.initialize();
+              return sosService;
             } catch (e) {
               debugPrint('Error initializing SosService: $e');
               rethrow;
@@ -76,6 +91,7 @@ void main() {
           },
         ),
 
+        // Notification Service
         ProxyProvider<AuthService, NotificationService>(
           update: (_, authService, previousNotificationService) {
             try {
@@ -99,20 +115,53 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Tracking System',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        appBarTheme: const AppBarTheme(elevation: 0, centerTitle: true),
-      ),
+      title: 'Driver Tracking System',
+      theme: AppTheme.lightTheme,
       home: const AuthenticationWrapper(),
       debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+          child: child!,
+        );
+      },
     );
   }
 }
 
-class AuthenticationWrapper extends StatelessWidget {
+class AuthenticationWrapper extends StatefulWidget {
   const AuthenticationWrapper({Key? key}) : super(key: key);
+
+  @override
+  _AuthenticationWrapperState createState() => _AuthenticationWrapperState();
+}
+
+class _AuthenticationWrapperState extends State<AuthenticationWrapper>
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -120,27 +169,90 @@ class AuthenticationWrapper extends StatelessWidget {
       future: Provider.of<AuthService>(context, listen: false).isLoggedIn(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+          return Scaffold(
+            body: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppTheme.primaryRed, AppTheme.darkRed],
+                ),
+              ),
+              child: Center(
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: AppTheme.goldGradient,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryGold.withOpacity(0.4),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.local_shipping_rounded,
+                          size: 50,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingLarge),
+                      const Text(
+                        'Driver Tracking',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingSmall),
+                      Text(
+                        'Loading your experience...',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingXLarge),
+                      const SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           );
         }
 
         if (snapshot.data == true) {
           // User is logged in, load user data and navigate to home
           final authService = Provider.of<AuthService>(context, listen: false);
-          // Add error handling for authentication check
           try {
             authService.checkAuthentication();
           } catch (e) {
             debugPrint('Error checking authentication: $e');
-            // You may want to handle authentication errors here
           }
 
-          return const HomeScreen();
+          return const ModernHomeScreen();
         }
 
         // User is not logged in, navigate to login
-        return const LoginScreen();
+        return const ModernLoginScreen();
       },
     );
   }
