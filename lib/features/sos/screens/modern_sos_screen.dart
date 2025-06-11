@@ -31,7 +31,7 @@ class _ModernSosScreenState extends State<ModernSosScreen>
   void initState() {
     super.initState();
     _initAnimations();
-    _checkForActiveAlert();
+    _quickCheckForActiveAlert();
   }
 
   void _initAnimations() {
@@ -41,7 +41,7 @@ class _ModernSosScreenState extends State<ModernSosScreen>
     );
 
     _shakeController = AnimationController(
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 300),
       vsync: this,
     );
 
@@ -49,7 +49,7 @@ class _ModernSosScreenState extends State<ModernSosScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    _shakeAnimation = Tween<double>(begin: 0, end: 10).animate(
+    _shakeAnimation = Tween<double>(begin: 0, end: 8).animate(
       CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn),
     );
   }
@@ -62,30 +62,28 @@ class _ModernSosScreenState extends State<ModernSosScreen>
     super.dispose();
   }
 
-  Future<void> _checkForActiveAlert() async {
-    setState(() {
-      _isCheckingActive = true;
-      _errorMessage = null;
-    });
-
+  Future<void> _quickCheckForActiveAlert() async {
     try {
       final sosService = Provider.of<SosService>(context, listen: false);
       final activeAlert = await sosService.getActiveSosAlert();
 
-      setState(() {
-        _activeAlert = activeAlert;
-        _isCheckingActive = false;
-      });
+      if (mounted) {
+        setState(() {
+          _activeAlert = activeAlert;
+          _isCheckingActive = false;
+        });
 
-      if (_activeAlert?.isActive == true) {
-        _pulseController.repeat(reverse: true);
+        if (_activeAlert?.isActive == true) {
+          _pulseController.repeat(reverse: true);
+        }
       }
     } catch (e) {
-      print('Error checking active SOS alert: $e');
-      setState(() {
-        _errorMessage = 'Failed to check active alerts. Please try again.';
-        _isCheckingActive = false;
-      });
+      debugPrint('Error checking active SOS alert: $e');
+      if (mounted) {
+        setState(() {
+          _isCheckingActive = false;
+        });
+      }
     }
   }
 
@@ -96,55 +94,56 @@ class _ModernSosScreenState extends State<ModernSosScreen>
       return;
     }
 
-    // Show immediate feedback
+    // Show immediate UI feedback
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
-    // Show optimistic UI immediately
-    _showCustomSnackBar('Sending emergency alert...', AppTheme.info);
+    // Show immediate feedback to user
+    _showCustomSnackBar('🚨 Sending emergency alert...', AppTheme.info);
 
     try {
       final sosService = Provider.of<SosService>(context, listen: false);
-      final locationService = Provider.of<LocationService>(
-        context,
-        listen: false,
-      );
 
-      // Initialize in parallel
-      final futures = await Future.wait([
-        locationService.initialize(),
-        Future.delayed(Duration.zero), // Placeholder for any other init
-      ]);
-
+      // Send SOS - this should be very fast now
       final success = await sosService.sendSosAlert(
         _messageController.text.trim(),
       );
 
-      if (success) {
-        final alert = sosService.activeAlert;
-        setState(() {
-          _activeAlert = alert;
-          _isLoading = false;
-        });
+      if (mounted) {
+        if (success) {
+          final alert = sosService.activeAlert;
+          setState(() {
+            _activeAlert = alert;
+            _isLoading = false;
+          });
 
-        _pulseController.repeat(reverse: true);
-        _showCustomSnackBar('✅ Emergency alert sent!', AppTheme.success);
-      } else {
-        setState(() {
-          _errorMessage = 'Failed to send SOS alert. Please try again.';
-          _isLoading = false;
-        });
-        _showCustomSnackBar('❌ Failed to send alert', AppTheme.danger);
+          _pulseController.repeat(reverse: true);
+          _showCustomSnackBar('✅ Emergency alert sent!', AppTheme.success);
+        } else {
+          setState(() {
+            _errorMessage = 'Failed to send SOS alert. Please try again.';
+            _isLoading = false;
+          });
+          _showCustomSnackBar(
+            '❌ Failed to send alert - Please retry',
+            AppTheme.danger,
+          );
+        }
       }
     } catch (e) {
-      print('Error sending SOS alert: $e');
-      setState(() {
-        _errorMessage = 'Network error. Please check connection.';
-        _isLoading = false;
-      });
-      _showCustomSnackBar('❌ Network error', AppTheme.danger);
+      debugPrint('Error sending SOS alert: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Network error. Please check connection.';
+          _isLoading = false;
+        });
+        _showCustomSnackBar(
+          '❌ Network error - Check connection',
+          AppTheme.danger,
+        );
+      }
     }
   }
 
@@ -158,26 +157,30 @@ class _ModernSosScreenState extends State<ModernSosScreen>
       final sosService = Provider.of<SosService>(context, listen: false);
       final success = await sosService.cancelSosAlert();
 
-      if (success) {
-        setState(() {
-          _activeAlert = null;
-          _isLoading = false;
-        });
+      if (mounted) {
+        if (success) {
+          setState(() {
+            _activeAlert = null;
+            _isLoading = false;
+          });
 
-        _pulseController.stop();
-        _showCustomSnackBar('SOS alert cancelled', AppTheme.info);
-      } else {
+          _pulseController.stop();
+          _showCustomSnackBar('SOS alert cancelled', AppTheme.info);
+        } else {
+          setState(() {
+            _errorMessage = 'Failed to cancel SOS alert. Please try again.';
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error cancelling SOS alert: $e');
+      if (mounted) {
         setState(() {
-          _errorMessage = 'Failed to cancel SOS alert. Please try again.';
+          _errorMessage = 'An error occurred. Please try again later.';
           _isLoading = false;
         });
       }
-    } catch (e) {
-      print('Error cancelling SOS alert: $e');
-      setState(() {
-        _errorMessage = 'An error occurred. Please try again later.';
-        _isLoading = false;
-      });
     }
   }
 
@@ -356,14 +359,16 @@ class _ModernSosScreenState extends State<ModernSosScreen>
                     ),
                     child: TextField(
                       controller: _messageController,
-                      maxLines: 4,
+                      maxLines: 3, // Reduced for faster typing
                       enabled: !_isLoading,
                       decoration: InputDecoration(
-                        hintText: 'Describe the emergency situation...',
+                        hintText: 'Emergency details (required)...',
                         border: InputBorder.none,
                         hintStyle: TextStyle(color: Colors.grey[500]),
                       ),
                       style: AppTheme.bodyLarge,
+                      // Auto-focus for faster input
+                      autofocus: true,
                     ),
                   ),
                 );
@@ -372,7 +377,7 @@ class _ModernSosScreenState extends State<ModernSosScreen>
 
             const SizedBox(height: AppTheme.spacingXLarge),
 
-            // SOS Button
+            // Large SOS Button for easy emergency access
             Container(
               width: double.infinity,
               height: 80,
@@ -445,6 +450,37 @@ class _ModernSosScreenState extends State<ModernSosScreen>
 
             const SizedBox(height: AppTheme.spacingLarge),
 
+            // Quick action buttons for common emergencies
+            Row(
+              children: [
+                Expanded(
+                  child: _quickActionButton(
+                    'Medical',
+                    Icons.medical_services,
+                    'Medical emergency',
+                  ),
+                ),
+                const SizedBox(width: AppTheme.spacingMedium),
+                Expanded(
+                  child: _quickActionButton(
+                    'Accident',
+                    Icons.car_crash,
+                    'Vehicle accident',
+                  ),
+                ),
+                const SizedBox(width: AppTheme.spacingMedium),
+                Expanded(
+                  child: _quickActionButton(
+                    'Breakdown',
+                    Icons.build,
+                    'Vehicle breakdown',
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: AppTheme.spacingLarge),
+
             // Warning Text
             Container(
               padding: const EdgeInsets.all(AppTheme.spacingMedium),
@@ -473,6 +509,37 @@ class _ModernSosScreenState extends State<ModernSosScreen>
                     ),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _quickActionButton(String label, IconData icon, String message) {
+    return GestureDetector(
+      onTap: () {
+        _messageController.text = message;
+        _sendSosAlert();
+      },
+      child: Container(
+        padding: const EdgeInsets.all(AppTheme.spacingSmall),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+          border: Border.all(color: Colors.white.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: Colors.white, size: 24),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],

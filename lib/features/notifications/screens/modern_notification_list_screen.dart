@@ -36,11 +36,16 @@ class _ModernNotificationListScreenState
 
   @override
   void dispose() {
+    if (_animationController.isCompleted || _animationController.isAnimating) {
+      _animationController.stop();
+    }
     _animationController.dispose();
     super.dispose();
   }
 
   Future<void> _loadNotifications() async {
+    if (!mounted) return; // Add this check
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -53,16 +58,21 @@ class _ModernNotificationListScreenState
       );
       final notifications = await notificationService.getNotifications();
 
-      setState(() {
-        _notifications = notifications;
-        _isLoading = false;
-      });
+      if (mounted) {
+        // Add this check
+        setState(() {
+          _notifications = notifications;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      print('Error loading notifications: $e');
-      setState(() {
-        _errorMessage = 'Failed to load notifications. Please try again.';
-        _isLoading = false;
-      });
+      if (mounted) {
+        // Add this check
+        setState(() {
+          _errorMessage = 'Failed to load notifications. Please try again.';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -156,59 +166,65 @@ class _ModernNotificationListScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      extendBodyBehindAppBar: true,
-      appBar: CustomAppBar(
-        title: 'Notifications',
-        backgroundColor: Colors.transparent,
-        actions: [
-          if (_notifications.isNotEmpty)
-            IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(
-                    AppTheme.borderRadiusSmall,
+    return Consumer<NotificationService>(
+      builder: (context, notificationService, child) {
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          extendBodyBehindAppBar: true,
+          appBar: CustomAppBar(
+            title: 'Notifications',
+            backgroundColor: Colors.transparent,
+            actions: [
+              if (_notifications.isNotEmpty)
+                IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(
+                        AppTheme.borderRadiusSmall,
+                      ),
+                      boxShadow: AppTheme.cardShadow,
+                    ),
+                    child: const Icon(Icons.done_all, color: Colors.black87),
                   ),
-                  boxShadow: AppTheme.cardShadow,
+                  onPressed: _markAllAsRead,
+                  tooltip: 'Mark all as read',
                 ),
-                child: const Icon(Icons.done_all, color: Colors.black87),
+              IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(
+                      AppTheme.borderRadiusSmall,
+                    ),
+                    boxShadow: AppTheme.cardShadow,
+                  ),
+                  child: Icon(
+                    Icons.refresh,
+                    color: _isLoading ? Colors.grey : Colors.black87,
+                  ),
+                ),
+                onPressed: _isLoading ? null : _loadNotifications,
               ),
-              onPressed: _markAllAsRead,
-              tooltip: 'Mark all as read',
-            ),
-          IconButton(
-            icon: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(AppTheme.borderRadiusSmall),
-                boxShadow: AppTheme.cardShadow,
-              ),
-              child: Icon(
-                Icons.refresh,
-                color: _isLoading ? Colors.grey : Colors.black87,
-              ),
-            ),
-            onPressed: _isLoading ? null : _loadNotifications,
+            ],
           ),
-        ],
-      ),
-      body: Container(
-        decoration:
-            AppTheme.backgroundGradient != null
-                ? const BoxDecoration(gradient: AppTheme.backgroundGradient)
-                : null,
-        child: SafeArea(
-          child: RefreshIndicator(
-            onRefresh: _loadNotifications,
-            color: AppTheme.primaryRed,
-            child: _buildContent(),
+          body: Container(
+            decoration:
+                AppTheme.backgroundGradient != null
+                    ? const BoxDecoration(gradient: AppTheme.backgroundGradient)
+                    : null,
+            child: SafeArea(
+              child: RefreshIndicator(
+                onRefresh: _loadNotifications,
+                color: AppTheme.primaryRed,
+                child: _buildContent(),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -353,6 +369,9 @@ class _ModernNotificationListScreenState
           itemBuilder: (context, index) {
             final notification = _notifications[index];
             return SlideTransition(
+              key: Key(
+                'notification_${notification.id}_$index',
+              ), // More specific key
               position: Tween<Offset>(
                 begin: const Offset(0, 0.3),
                 end: Offset.zero,
@@ -366,13 +385,7 @@ class _ModernNotificationListScreenState
                   ),
                 ),
               ),
-              child: FadeTransition(
-                opacity: _animationController,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: AppTheme.spacingMedium),
-                  child: _buildNotificationCard(notification),
-                ),
-              ),
+              child: _buildNotificationCard(notification),
             );
           },
         );

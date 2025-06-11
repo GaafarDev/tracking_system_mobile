@@ -64,6 +64,10 @@ class _ModernReportIncidentScreenState extends State<ModernReportIncidentScreen>
   @override
   void initState() {
     super.initState();
+    _initAnimations();
+  }
+
+  void _initAnimations() {
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -219,34 +223,27 @@ class _ModernReportIncidentScreenState extends State<ModernReportIncidentScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      extendBodyBehindAppBar: true,
-      appBar: CustomAppBar(
-        title: 'Report Incident',
-        backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('Report Incident'),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
       ),
-      body: Container(
-        decoration:
-            AppTheme.backgroundGradient != null
-                ? const BoxDecoration(gradient: AppTheme.backgroundGradient)
-                : null,
-        child: LoadingOverlay(
-          isLoading: _isSubmitting,
-          message: _loadingMessage,
-          child: SafeArea(
-            child: AnimatedBuilder(
-              animation: _slideAnimation,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, _slideAnimation.value * 50),
-                  child: Opacity(
-                    opacity: 1 - _slideAnimation.value,
-                    child: _buildContent(),
-                  ),
-                );
-              },
-            ),
-          ),
+      body: LoadingOverlay(
+        isLoading: _isSubmitting,
+        message: _loadingMessage,
+        child: AnimatedBuilder(
+          animation: _slideAnimation,
+          builder: (context, child) {
+            return Transform.translate(
+              offset: Offset(0, _slideAnimation.value * 50),
+              child: Opacity(
+                opacity: 1 - _slideAnimation.value,
+                child: _buildContent(),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -261,7 +258,16 @@ class _ModernReportIncidentScreenState extends State<ModernReportIncidentScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header Section
-            GlassCard(
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppTheme.spacingLarge),
+              decoration: BoxDecoration(
+                color: AppTheme.warning.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(
+                  AppTheme.borderRadiusMedium,
+                ),
+                border: Border.all(color: AppTheme.warning.withOpacity(0.3)),
+              ),
               child: Column(
                 children: [
                   Icon(
@@ -312,13 +318,33 @@ class _ModernReportIncidentScreenState extends State<ModernReportIncidentScreen>
             const SizedBox(height: AppTheme.spacingXLarge),
 
             // Submit Button
-            GradientButton(
-              text: 'SUBMIT REPORT',
-              onPressed: _submitIncident,
-              isLoading: _isSubmitting,
-              icon: Icons.send_rounded,
+            SizedBox(
               width: double.infinity,
               height: 56,
+              child: ElevatedButton.icon(
+                onPressed: _isSubmitting ? null : _submitIncident,
+                icon:
+                    _isSubmitting
+                        ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                        : const Icon(Icons.send_rounded),
+                label: Text(_isSubmitting ? 'SUBMITTING...' : 'SUBMIT REPORT'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryRed,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      AppTheme.borderRadiusMedium,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -327,7 +353,13 @@ class _ModernReportIncidentScreenState extends State<ModernReportIncidentScreen>
   }
 
   Widget _buildIncidentTypeSelector() {
-    return GlassCard(
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.spacingMedium),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
       child: Column(
         children:
             _incidentTypes.map((type) {
@@ -414,7 +446,13 @@ class _ModernReportIncidentScreenState extends State<ModernReportIncidentScreen>
   }
 
   Widget _buildDescriptionField() {
-    return GlassCard(
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.spacingMedium),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
       child: TextFormField(
         controller: _descriptionController,
         maxLines: 5,
@@ -434,7 +472,13 @@ class _ModernReportIncidentScreenState extends State<ModernReportIncidentScreen>
   }
 
   Widget _buildPhotoSection() {
-    return GlassCard(
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.spacingMedium),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusMedium),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
       child: _photoFile != null ? _buildPhotoPreview() : _buildAddPhotoButton(),
     );
   }

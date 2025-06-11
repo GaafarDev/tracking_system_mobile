@@ -11,58 +11,64 @@ class SosService {
   final LocationService _locationService;
   SosAlert? _activeAlert;
   String? _cachedToken;
+  bool _isSending = false; // Prevent multiple simultaneous sends
 
   SosService(this._authService, this._locationService);
 
   SosAlert? get activeAlert => _activeAlert;
 
-  // ULTRA-FAST SOS - Use cached location and token
+  // ULTRA-FAST SOS - Send immediately with minimal validation
   Future<bool> sendSosAlert(String message) async {
+    if (_isSending) {
+      debugPrint('⚠️ SOS already in progress, ignoring duplicate request');
+      return false;
+    }
+
+    _isSending = true;
+
     try {
-      debugPrint('🚨 Starting SOS alert...');
+      debugPrint('🚨 EMERGENCY SOS - Starting immediate send...');
       final startTime = DateTime.now();
 
       // Get token immediately (should be cached)
       String? token = _cachedToken ?? await _authService.getToken();
       if (token == null) {
-        debugPrint('❌ No token available');
+        debugPrint('❌ No auth token - SOS failed');
         return false;
       }
       _cachedToken = token;
 
-      // Use IMMEDIATE location - don't wait for GPS
-      var location = _locationService.lastLocation;
+      // Use default location first - don't wait for GPS
+      double lat = 0.0;
+      double lng = 0.0;
 
-      // If no cached location, use default and get real location async
-      if (location == null) {
-        debugPrint('⚠️ No cached location, using default');
-        // Send with default location first, update later
-        final response = await _sendSosRequest(token, 0.0, 0.0, message);
-
-        // Try to get actual location in background
-        _updateLocationAsync(token);
-
-        return response;
+      // Try to get cached location quickly
+      final cachedLocation = _locationService.lastLocation;
+      if (cachedLocation != null) {
+        lat = cachedLocation.latitude ?? 0.0;
+        lng = cachedLocation.longitude ?? 0.0;
+        debugPrint('📍 Using cached location: $lat, $lng');
+      } else {
+        debugPrint('⚠️ No location cache - using default (0,0)');
       }
 
-      // Send with cached location immediately
-      debugPrint(
-        '📍 Using cached location: ${location.latitude}, ${location.longitude}',
-      );
-      final success = await _sendSosRequest(
-        token,
-        location.latitude ?? 0.0,
-        location.longitude ?? 0.0,
-        message,
-      );
+      // Send SOS immediately
+      final success = await _sendSosRequest(token, lat, lng, message);
 
       final duration = DateTime.now().difference(startTime).inMilliseconds;
       debugPrint('⚡ SOS completed in ${duration}ms');
 
+      // If we used default location, try to update with real location in background
+      if (lat == 0.0 && lng == 0.0) {
+        _updateLocationAsync(token);
+      }
+
       return success;
     } catch (e) {
-      debugPrint('❌ SOS error: $e');
+      debugPrint('❌ SOS CRITICAL ERROR: $e');
       return false;
+    } finally {
+      _isSending = false;
     }
   }
 
@@ -72,45 +78,55 @@ class SosService {
     double lng,
     String message,
   ) async {
-    final response = await http
-        .post(
-          Uri.parse('${ApiConfig.baseUrl}${ApiConfig.sendSosAlert}'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-            'Accept': 'application/json',
-          },
-          body: jsonEncode({
-            'latitude': lat,
-            'longitude': lng,
-            'message': message,
-          }),
-        )
-        .timeout(const Duration(seconds: 3)); // Very short timeout
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}${ApiConfig.sendSosAlert}'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'latitude': lat,
+              'longitude': lng,
+              'message': message,
+            }),
+          )
+          .timeout(
+            const Duration(seconds: 2),
+          ); // Very short timeout for emergency
 
-    debugPrint('📡 SOS response: ${response.statusCode}');
+      debugPrint('📡 SOS response: ${response.statusCode}');
 
-    if (response.statusCode == 201 || response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data['sos_alert'] != null) {
-        _activeAlert = SosAlert.fromJson(data['sos_alert']);
-        debugPrint('✅ SOS sent successfully');
-        return true;
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['sos_alert'] != null) {
+          _activeAlert = SosAlert.fromJson(data['sos_alert']);
+          debugPrint('✅ SOS sent successfully - Alert ID: ${_activeAlert!.id}');
+          return true;
+        }
       }
-    }
 
-    debugPrint('❌ SOS failed: ${response.statusCode} - ${response.body}');
-    return false;
+      debugPrint('❌ SOS failed: ${response.statusCode} - ${response.body}');
+      return false;
+    } catch (e) {
+      debugPrint('❌ SOS network error: $e');
+      return false;
+    }
   }
 
   void _updateLocationAsync(String token) async {
     try {
+      debugPrint('📍 Updating SOS with real location...');
       final location = await _locationService.getCurrentLocation();
       if (location != null && _activeAlert != null) {
-        // Update SOS with real location
-        await http
+        // Update SOS with real location - don't wait for response
+        http
             .patch(
-              Uri.parse('${ApiConfig.baseUrl}/sos-alerts/${_activeAlert!.id}'),
+              Uri.parse(
+                '${ApiConfig.baseUrl}/api/sos-alerts/${_activeAlert!.id}',
+              ),
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer $token',
@@ -120,27 +136,29 @@ class SosService {
                 'longitude': location.longitude,
               }),
             )
-            .timeout(const Duration(seconds: 2));
-        debugPrint('📍 SOS location updated');
+            .timeout(const Duration(seconds: 2))
+            .then((_) => debugPrint('📍 SOS location updated'))
+            .catchError((e) => debugPrint('⚠️ Location update failed: $e'));
       }
     } catch (e) {
-      debugPrint('⚠️ Location update failed: $e');
+      debugPrint('⚠️ Background location update error: $e');
     }
   }
 
-  // Pre-cache token and check for active alerts
+  // Pre-cache token for faster SOS
   Future<void> initialize() async {
     try {
       _cachedToken = await _authService.getToken();
       if (_cachedToken != null) {
         await getActiveSosAlert();
       }
+      debugPrint('✅ SOS service initialized');
     } catch (e) {
       debugPrint('⚠️ SOS service initialization error: $e');
     }
   }
 
-  // FAST active SOS check - use cached token
+  // FAST active SOS check
   Future<SosAlert?> getActiveSosAlert() async {
     try {
       String? token = _cachedToken ?? await _authService.getToken();
@@ -157,7 +175,7 @@ class SosService {
               'Accept': 'application/json',
             },
           )
-          .timeout(const Duration(seconds: 3));
+          .timeout(const Duration(seconds: 2));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -175,7 +193,7 @@ class SosService {
     }
   }
 
-  // FAST SOS cancellation - use cached token
+  // FAST SOS cancellation
   Future<bool> cancelSosAlert() async {
     if (_activeAlert == null) {
       debugPrint('❌ No SOS to cancel');
@@ -199,7 +217,7 @@ class SosService {
               'Accept': 'application/json',
             },
           )
-          .timeout(const Duration(seconds: 3));
+          .timeout(const Duration(seconds: 2));
 
       if (response.statusCode == 200) {
         _activeAlert = null;
@@ -219,5 +237,6 @@ class SosService {
   void clearCache() {
     _cachedToken = null;
     _activeAlert = null;
+    _isSending = false;
   }
 }

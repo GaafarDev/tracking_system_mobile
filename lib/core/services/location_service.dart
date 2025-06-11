@@ -20,46 +20,71 @@ class LocationService {
   bool _isTracking = false;
   bool get isTracking => _isTracking;
 
-  // Add request throttling
+  // Reduce request frequency for better performance
   DateTime? _lastLocationUpdate;
   bool _isUpdatingLocation = false;
+  String? _cachedToken; // Cache token for location updates
 
   LocationService(this._authService);
 
-  // Optimized initialization
+  // Faster initialization - skip permission checks if already granted
   Future<bool> initialize() async {
     if (kIsWeb) {
       try {
-        _lastLocation = await _location.getLocation();
+        _lastLocation = await _location.getLocation().timeout(
+          const Duration(seconds: 3),
+        );
         return true;
       } catch (e) {
         debugPrint('Web location error: $e');
         return false;
       }
     } else {
-      bool serviceEnabled = await _location.serviceEnabled();
-      if (!serviceEnabled) {
-        serviceEnabled = await _location.requestService();
-        if (!serviceEnabled) return false;
+      try {
+        // Try to get location first - if it works, permissions are OK
+        _lastLocation = await _location.getLocation().timeout(
+          const Duration(seconds: 2),
+        );
+
+        _location.changeSettings(
+          accuracy: LocationAccuracy.balanced, // Faster than high accuracy
+          interval: 20000, // 20 seconds
+          distanceFilter: 20, // 20 meters
+        );
+
+        debugPrint('✅ Location service initialized quickly');
+        return true;
+      } catch (e) {
+        // Fall back to permission checking
+        debugPrint('⚠️ Fallback to permission check: $e');
+        return await _initializeWithPermissions();
       }
-
-      PermissionStatus permissionStatus = await _location.hasPermission();
-      if (permissionStatus == PermissionStatus.denied) {
-        permissionStatus = await _location.requestPermission();
-        if (permissionStatus != PermissionStatus.granted) return false;
-      }
-
-      _location.changeSettings(
-        accuracy: LocationAccuracy.high,
-        interval: 15000, // Increased to 15 seconds to reduce API calls
-        distanceFilter: 10, // Increased to 10 meters
-      );
-
-      return true;
     }
   }
 
-  // Optimized location tracking - Cache token to avoid repeated calls
+  Future<bool> _initializeWithPermissions() async {
+    bool serviceEnabled = await _location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await _location.requestService();
+      if (!serviceEnabled) return false;
+    }
+
+    PermissionStatus permissionStatus = await _location.hasPermission();
+    if (permissionStatus == PermissionStatus.denied) {
+      permissionStatus = await _location.requestPermission();
+      if (permissionStatus != PermissionStatus.granted) return false;
+    }
+
+    _location.changeSettings(
+      accuracy: LocationAccuracy.balanced,
+      interval: 20000,
+      distanceFilter: 20,
+    );
+
+    return true;
+  }
+
+  // Optimized location tracking
   Future<bool> startLocationTracking(int vehicleId) async {
     if (_isTracking) return true;
 
@@ -67,21 +92,22 @@ class LocationService {
     if (!isInitialized) return false;
 
     try {
-      // Get token once and cache it for the tracking session
+      // Cache token once at start
       String? token = await _authService.getToken();
       if (token == null) {
         debugPrint('❌ No token for location tracking');
         return false;
       }
+      _cachedToken = token;
 
       _location.onLocationChanged.listen((LocationData currentLocation) {
         _lastLocation = currentLocation;
         _locationStreamController.add(currentLocation);
       });
 
-      // Start periodic updates with cached token
-      _timer = Timer.periodic(const Duration(seconds: 30), (timer) async {
-        await _sendLocationToServer(vehicleId, token);
+      // Longer intervals to reduce battery drain and API calls
+      _timer = Timer.periodic(const Duration(seconds: 45), (timer) async {
+        await _sendLocationToServer(vehicleId);
       });
 
       _isTracking = true;
@@ -93,15 +119,15 @@ class LocationService {
     }
   }
 
-  // Optimized server update - Use cached token
-  Future<bool> _sendLocationToServer(int vehicleId, String token) async {
+  // Optimized server update with cached token
+  Future<bool> _sendLocationToServer(int vehicleId) async {
     // Prevent duplicate requests
     if (_isUpdatingLocation) return true;
 
     final now = DateTime.now();
     if (_lastLocationUpdate != null &&
-        now.difference(_lastLocationUpdate!).inSeconds < 25) {
-      return true; // Skip if updated recently
+        now.difference(_lastLocationUpdate!).inSeconds < 35) {
+      return true; // Skip if updated too recently
     }
 
     _isUpdatingLocation = true;
@@ -109,16 +135,18 @@ class LocationService {
 
     try {
       if (_lastLocation == null) {
-        _lastLocation = await _location.getLocation();
+        _lastLocation = await _location.getLocation().timeout(
+          const Duration(seconds: 2),
+        );
       }
 
-      // Use the cached token instead of calling getToken() again
+      // Use cached token
       final response = await http
           .post(
             Uri.parse('${ApiConfig.baseUrl}${ApiConfig.updateLocation}'),
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
+              'Authorization': 'Bearer $_cachedToken',
             },
             body: jsonEncode({
               'latitude': _lastLocation!.latitude,
@@ -128,7 +156,7 @@ class LocationService {
               'vehicle_id': vehicleId,
             }),
           )
-          .timeout(const Duration(seconds: 3)); // Reduced timeout
+          .timeout(const Duration(seconds: 2));
 
       return response.statusCode == 200;
     } catch (e) {
@@ -139,24 +167,24 @@ class LocationService {
     }
   }
 
-  // Fast current location - no server calls
+  // Very fast current location - prioritize speed over accuracy
   Future<LocationData?> getCurrentLocation() async {
     try {
-      // Return cached location if recent (less than 30 seconds old)
+      // Return cached location if recent (less than 60 seconds old)
       if (_lastLocation != null) {
         return _lastLocation;
       }
 
-      // Only get new location if not cached
-      bool isInitialized = await initialize();
-      if (!isInitialized) return null;
-
-      final location = await _location.getLocation();
-      _lastLocation = location; // Cache it
+      // Get new location with short timeout
+      final location = await _location.getLocation().timeout(
+        const Duration(seconds: 1),
+      );
+      _lastLocation = location;
       return location;
     } catch (e) {
       debugPrint('❌ Get location error: $e');
-      return null;
+      // Return last known location even if old
+      return _lastLocation;
     }
   }
 
@@ -164,6 +192,7 @@ class LocationService {
     _timer?.cancel();
     _timer = null;
     _isTracking = false;
+    _cachedToken = null; // Clear cached token
     debugPrint('✅ Location tracking stopped');
   }
 
