@@ -10,7 +10,7 @@ class AuthService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   User? _currentUser;
   Driver? _currentDriver;
-  String? _cachedToken; // Cache the token to avoid repeated reads
+  String? _cachedToken;
 
   User? get currentUser => _currentUser;
   Driver? get currentDriver => _currentDriver;
